@@ -2,11 +2,8 @@
 <html>
 <head>
   <meta charset="UTF-8">
-  <title>Mirror App</title>
-
-  <!-- Required for mobile camera -->
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta http-equiv="Permissions-Policy" content="camera=(self)">
+  <title>Mirror</title>
+  <link rel="manifest" href="manifest.json">
 
   <style>
     body {
@@ -20,32 +17,34 @@
       width: 100vw;
       height: 100vh;
       object-fit: cover;
-      position: absolute;
+      position: fixed;
       top: 0;
       left: 0;
     }
 
     #captureBtn {
       position: absolute;
-      bottom: 30px;
+      bottom: 20px;
       left: 50%;
       transform: translateX(-50%);
-      padding: 15px 30px;
       background: white;
       color: black;
+      padding: 12px 25px;
       border: none;
       border-radius: 10px;
       font-size: 18px;
-      cursor: pointer;
-      z-index: 10;
       font-weight: bold;
+      cursor: pointer;
     }
   </style>
 </head>
+
 <body>
 
-  <video id="camera" autoplay playsinline></video>
+  <video id="mirror" autoplay playsinline></video>
   <button id="captureBtn">📸 Take Photo</button>
+
+  <!-- Hidden canvas -->
   <canvas id="canvas" style="display:none;"></canvas>
 
   <!-- Firebase -->
@@ -54,102 +53,75 @@
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js"></script>
 
   <script>
-    // ---------------------------------------
-    //  🔥 1. Firebase Config
-    // ---------------------------------------
+    // -------------------------
+    // 1. Firebase Config
+    // -------------------------
     const firebaseConfig = {
-      apiKey: "AIzaSyC8ByQIuNOfe9PNOMJGCZTKzPN2ls4gf7w",
-      authDomain: "prashuk-ce0f8.firebaseapp.com",
-      projectId: "prashuk-ce0f8",
-      storageBucket: "prashuk-ce0f8.firebasestorage.app",
-      messagingSenderId: "109567391514",
-      appId: "1:109567391514:web:c20e7877192b423e839ea3",
-      measurementId: "G-93C2KCMLKY"
+      apiKey: "YOUR_API_KEY",
+      authDomain: "YOUR_AUTH_DOMAIN",
+      projectId: "YOUR_PROJECT_ID",
+      storageBucket: "YOUR_STORAGE_BUCKET",
+      messagingSenderId: "YOUR_SENDER_ID",
+      appId: "YOUR_APP_ID"
     };
+
     firebase.initializeApp(firebaseConfig);
     const storage = firebase.storage();
     const db = firebase.firestore();
 
-    const video = document.getElementById("camera");
+    // -------------------------
+    // 2. Start Mirror Camera
+    // -------------------------
+    navigator.mediaDevices.getUserMedia({ 
+        video: { facingMode: "user" }, 
+        audio: false 
+    })
+      .then(stream => {
+        document.getElementById('mirror').srcObject = stream;
+      })
+      .catch(e => alert("Camera Error: " + e.message));
 
-    // ---------------------------------------
-    //  📷 2. Start Camera with Fallback
-    // ---------------------------------------
-    async function startCamera() {
-      try {
-        // Try front camera
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: { exact: "user" } }
-        });
-        video.srcObject = stream;
-      } catch (e1) {
-        console.log("Front camera error, trying fallback:", e1);
-
-        try {
-          // Try normal camera
-          const stream2 = await navigator.mediaDevices.getUserMedia({
-            video: true
-          });
-          video.srcObject = stream2;
-        } catch (e2) {
-          console.log("Camera failed:", e2);
-          alert("Camera Error: " + e2.message);
-        }
-      }
-    }
-
-    startCamera();
-
-    // ---------------------------------------
-    //  📸 3. Capture Button
-    // ---------------------------------------
-    document.getElementById("captureBtn").addEventListener("click", () => {
-      takePhoto();
-    });
-
-    function takePhoto() {
+    // -------------------------
+    // 3. Capture + Upload Photo
+    // -------------------------
+    document.getElementById("captureBtn").onclick = function () {
+      const video = document.getElementById("mirror");
       const canvas = document.getElementById("canvas");
       const ctx = canvas.getContext("2d");
 
       canvas.width = video.videoWidth;
       canvas.height = video.videoHeight;
 
-      // mirror effect
+      // Mirror effect
       ctx.translate(canvas.width, 0);
       ctx.scale(-1, 1);
 
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
       canvas.toBlob(blob => {
-        uploadPhoto(blob);
+        uploadToFirebase(blob);
       }, "image/jpeg", 0.9);
-    }
+    };
 
-    // ---------------------------------------
-    //  🔼 4. Upload Photo to Firebase
-    // ---------------------------------------
-    function uploadPhoto(blob) {
-      const fileName = "mirror_" + Date.now() + ".jpg";
-      const ref = storage.ref("mirror_photos/" + fileName);
+    function uploadToFirebase(blob) {
+      const fileName = "photo_" + Date.now() + ".jpg";
+      const ref = storage.ref().child("mirror_photos/" + fileName);
 
       ref.put(blob).then(snapshot => {
         snapshot.ref.getDownloadURL().then(url => {
-          saveToDatabase(url);
+          saveToDB(url);
           alert("Photo Saved Successfully!");
         });
       });
     }
 
-    // ---------------------------------------
-    //  🗂 5. Save URL to Firestore
-    // ---------------------------------------
-    function saveToDatabase(url) {
+    function saveToDB(url) {
       db.collection("mirrorPhotos").add({
         imageUrl: url,
         timestamp: new Date()
       });
     }
-  </script>
 
+  </script>
 </body>
 </html>
