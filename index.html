@@ -2,37 +2,47 @@
 <html>
 <head>
   <meta charset="UTF-8">
-  <title>Mirror</title>
-  <link rel="manifest" href="manifest.json">
+  <title>Mirror App</title>
 
   <style>
     body {
       margin: 0;
       background: black;
-      overflow: hidden;
-      font-family: Arial;
       color: white;
+      font-family: Arial;
       text-align: center;
     }
 
-    #loginScreen {
-      height: 100vh;
+    /* Login Screen */
+    #authScreen {
       display: flex;
       flex-direction: column;
       justify-content: center;
       align-items: center;
+      height: 100vh;
     }
 
-    #loginBtn {
-      padding: 12px 20px;
+    input {
+      padding: 10px;
+      margin: 8px;
+      width: 250px;
+      font-size: 16px;
+    }
+
+    button {
+      padding: 10px 20px;
       font-size: 18px;
-      background: white;
-      color: black;
-      border-radius: 10px;
       border: none;
+      border-radius: 8px;
+      margin-top: 10px;
+      cursor: pointer;
     }
 
-    #mirror, canvas {
+    #loginBtn { background: white; color: black; }
+    #signupBtn { background: #00d4ff; color: black; }
+
+    /* Camera */
+    video, canvas {
       transform: scaleX(-1);
       width: 100vw;
       height: 100vh;
@@ -53,36 +63,37 @@
       padding: 12px 20px;
       font-size: 18px;
       border-radius: 10px;
-      border: none;
       display: none;
       z-index: 10;
     }
-
   </style>
 </head>
 <body>
 
-  <!-- LOGIN SCREEN -->
-  <div id="loginScreen">
-    <h2>Welcome to Mirror App</h2>
-    <p>Please login to continue</p>
-    <button id="loginBtn">Sign in with Google</button>
+  <!-- Auth Screen -->
+  <div id="authScreen">
+    <h2>Login to Mirror App</h2>
+
+    <input type="email" id="email" placeholder="Enter email">
+    <input type="password" id="password" placeholder="Enter password">
+
+    <button id="loginBtn">Login</button>
+    <button id="signupBtn">Create Account</button>
   </div>
 
-  <!-- CAMERA -->
-  <video id="mirror" autoplay playsinline></video>
+  <!-- Camera -->
+  <video id="camera" autoplay playsinline></video>
   <canvas id="canvas"></canvas>
+  <button id="captureBtn">📸 Capture</button>
 
-  <button id="captureBtn">📸 Take Photo</button>
-
-  <!-- Firebase -->
+  <!-- Firebase SDK -->
   <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-storage-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-firestore-compat.js"></script>
 
   <script>
-    // 1️⃣ Your Firebase Config
+    // 🔥 Firebase Config — REPLACE WITH YOURS
     const firebaseConfig = {
       apiKey: "AIzaSyC8ByQIuNOfe9PNOMJGCZTKzPN2ls4gf7w",
       authDomain: "prashuk-ce0f8.firebaseapp.com",
@@ -99,58 +110,81 @@
     const db = firebase.firestore();
     const storage = firebase.storage();
 
-    const loginScreen = document.getElementById("loginScreen");
-    const loginBtn = document.getElementById("loginBtn");
-    const video = document.getElementById("mirror");
+    const authScreen = document.getElementById("authScreen");
+    const camera = document.getElementById("camera");
     const canvas = document.getElementById("canvas");
     const captureBtn = document.getElementById("captureBtn");
 
-    // 2️⃣ Login With Google
-    loginBtn.onclick = function () {
-      const provider = new firebase.auth.GoogleAuthProvider();
-      auth.signInWithPopup(provider).catch(err => alert(err.message));
+    // ------------------------------
+    // 1️⃣ Create Account (Sign Up)
+    // ------------------------------
+    document.getElementById("signupBtn").onclick = () => {
+      const email = document.getElementById("email").value;
+      const password = document.getElementById("password").value;
+
+      auth.createUserWithEmailAndPassword(email, password)
+        .then(() => alert("Account created! Please Login."))
+        .catch(err => alert(err.message));
     };
 
+    // ------------------------------
+    // 2️⃣ Login with Email + Password
+    // ------------------------------
+    document.getElementById("loginBtn").onclick = () => {
+      const email = document.getElementById("email").value;
+      const password = document.getElementById("password").value;
+
+      auth.signInWithEmailAndPassword(email, password)
+        .catch(err => alert(err.message));
+    };
+
+    // ------------------------------
     // 3️⃣ When User Logs In → Start Camera
+    // ------------------------------
     auth.onAuthStateChanged(user => {
       if (user) {
-        loginScreen.style.display = "none";
+        authScreen.style.display = "none";
         startCamera();
       }
     });
 
-    // 4️⃣ Start Camera
+    // ------------------------------
+    // 4️⃣ Start User Camera
+    // ------------------------------
     function startCamera() {
       navigator.mediaDevices.getUserMedia({
         video: { facingMode: "user" },
         audio: false
       })
-        .then(stream => {
-          video.srcObject = stream;
-          video.style.display = "block";
-          captureBtn.style.display = "block";
-        })
-        .catch(e => alert("Camera Error: " + e.message));
+      .then(stream => {
+        camera.srcObject = stream;
+        camera.style.display = "block";
+        captureBtn.style.display = "block";
+      })
+      .catch(e => alert("Camera Error: " + e.message));
     }
 
+    // ------------------------------
     // 5️⃣ Capture Photo
+    // ------------------------------
     captureBtn.onclick = () => {
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
+      canvas.width = camera.videoWidth;
+      canvas.height = camera.videoHeight;
 
       const ctx = canvas.getContext("2d");
       ctx.scale(-1, 1);
-      ctx.drawImage(video, -canvas.width, 0, canvas.width, canvas.height);
+      ctx.drawImage(camera, -canvas.width, 0, canvas.width, canvas.height);
 
       canvas.toBlob(blob => uploadPhoto(blob), "image/jpeg", 0.95);
     };
 
-    // 6️⃣ Upload Photo → Storage → Firestore
+    // ------------------------------
+    // 6️⃣ Upload Photo → Storage + Firestore
+    // ------------------------------
     function uploadPhoto(blob) {
       const user = auth.currentUser;
-      if (!user) return alert("Login required!");
-
       const filename = `mirror/${user.uid}/${Date.now()}.jpg`;
+
       const ref = storage.ref().child(filename);
 
       ref.put(blob)
@@ -164,8 +198,8 @@
               createdAt: new Date()
             });
         })
-        .then(() => alert("Photo saved successfully!"))
-        .catch(err => alert("Error: " + err.message));
+        .then(() => alert("Photo saved!"))
+        .catch(err => alert(err.message));
     }
   </script>
 
