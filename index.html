@@ -4,31 +4,170 @@
   <meta charset="UTF-8">
   <title>Mirror</title>
   <link rel="manifest" href="manifest.json">
+
   <style>
     body {
       margin: 0;
       background: black;
+      overflow: hidden;
+      font-family: Arial;
+      color: white;
+      text-align: center;
     }
-    video {
+
+    #loginScreen {
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+    }
+
+    #loginBtn {
+      padding: 12px 20px;
+      font-size: 18px;
+      background: white;
+      color: black;
+      border-radius: 10px;
+      border: none;
+    }
+
+    #mirror, canvas {
       transform: scaleX(-1);
       width: 100vw;
       height: 100vh;
       object-fit: cover;
+      position: absolute;
+      top: 0;
+      left: 0;
+      display: none;
     }
+
+    #captureBtn {
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: white;
+      color: black;
+      padding: 12px 20px;
+      font-size: 18px;
+      border-radius: 10px;
+      border: none;
+      display: none;
+      z-index: 10;
+    }
+
   </style>
 </head>
 <body>
+
+  <!-- LOGIN SCREEN -->
+  <div id="loginScreen">
+    <h2>Welcome to Mirror App</h2>
+    <p>Please login to continue</p>
+    <button id="loginBtn">Sign in with Google</button>
+  </div>
+
+  <!-- CAMERA -->
   <video id="mirror" autoplay playsinline></video>
+  <canvas id="canvas"></canvas>
+
+  <button id="captureBtn">📸 Take Photo</button>
+
+  <!-- Firebase -->
+  <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-storage-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-firestore-compat.js"></script>
+
   <script>
-    navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" }, audio: false })
-      .then(stream => {
-        document.getElementById('mirror').srcObject = stream;
+    // 1️⃣ Your Firebase Config
+    const firebaseConfig = {
+      apiKey: "AIzaSyC8ByQIuNOfe9PNOMJGCZTKzPN2ls4gf7w",
+      authDomain: "prashuk-ce0f8.firebaseapp.com",
+      projectId: "prashuk-ce0f8",
+      storageBucket: "prashuk-ce0f8.firebasestorage.app",
+      messagingSenderId: "109567391514",
+      appId: "1:109567391514:web:c20e7877192b423e839ea3",
+      
+    };
+
+    firebase.initializeApp(firebaseConfig);
+
+    const auth = firebase.auth();
+    const db = firebase.firestore();
+    const storage = firebase.storage();
+
+    const loginScreen = document.getElementById("loginScreen");
+    const loginBtn = document.getElementById("loginBtn");
+    const video = document.getElementById("mirror");
+    const canvas = document.getElementById("canvas");
+    const captureBtn = document.getElementById("captureBtn");
+
+    // 2️⃣ Login With Google
+    loginBtn.onclick = function () {
+      const provider = new firebase.auth.GoogleAuthProvider();
+      auth.signInWithPopup(provider).catch(err => alert(err.message));
+    };
+
+    // 3️⃣ When User Logs In → Start Camera
+    auth.onAuthStateChanged(user => {
+      if (user) {
+        loginScreen.style.display = "none";
+        startCamera();
+      }
+    });
+
+    // 4️⃣ Start Camera
+    function startCamera() {
+      navigator.mediaDevices.getUserMedia({
+        video: { facingMode: "user" },
+        audio: false
       })
-      .catch(e => alert("Error: " + e.message));
-  </script>
-</body>
-</html>      });
+        .then(stream => {
+          video.srcObject = stream;
+          video.style.display = "block";
+          captureBtn.style.display = "block";
+        })
+        .catch(e => alert("Camera Error: " + e.message));
+    }
+
+    // 5️⃣ Capture Photo
+    captureBtn.onclick = () => {
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+
+      const ctx = canvas.getContext("2d");
+      ctx.scale(-1, 1);
+      ctx.drawImage(video, -canvas.width, 0, canvas.width, canvas.height);
+
+      canvas.toBlob(blob => uploadPhoto(blob), "image/jpeg", 0.95);
+    };
+
+    // 6️⃣ Upload Photo → Storage → Firestore
+    function uploadPhoto(blob) {
+      const user = auth.currentUser;
+      if (!user) return alert("Login required!");
+
+      const filename = `mirror/${user.uid}/${Date.now()}.jpg`;
+      const ref = storage.ref().child(filename);
+
+      ref.put(blob)
+        .then(snap => snap.ref.getDownloadURL())
+        .then(url => {
+          return db.collection("users")
+            .doc(user.uid)
+            .collection("photos")
+            .add({
+              url: url,
+              createdAt: new Date()
+            });
+        })
+        .then(() => alert("Photo saved successfully!"))
+        .catch(err => alert("Error: " + err.message));
     }
   </script>
+
 </body>
 </html>
